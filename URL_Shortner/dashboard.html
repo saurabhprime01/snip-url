@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Link Analytics</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; background: #f4f6f8; color: #1f2937; }
+    h1 { margin: 0 0 4px; font-size: 22px; }
+    .sub { color: #6b7280; margin-bottom: 20px; word-break: break-all; }
+    .cards { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+    .card { background: #fff; border-radius: 10px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .stat { min-width: 150px; }
+    .stat .n { font-size: 32px; font-weight: 700; }
+    .stat .l { color: #6b7280; font-size: 13px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+    .card h2 { font-size: 14px; margin: 0 0 12px; color: #374151; }
+    .wide { grid-column: 1 / -1; }
+    canvas { max-height: 280px; }
+    #err { color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <h1>Link Analytics: <span id="code"></span></h1>
+  <div class="sub" id="url"></div>
+  <div id="err"></div>
+
+  <div class="cards">
+    <div class="card stat"><div class="n" id="total">-</div><div class="l">Total clicks</div></div>
+    <div class="card stat"><div class="n" id="unique">-</div><div class="l">Unique visitors</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card wide"><h2>Clicks over time</h2><canvas id="timeChart"></canvas></div>
+    <div class="card"><h2>Browsers</h2><canvas id="browserChart"></canvas></div>
+    <div class="card"><h2>Devices</h2><canvas id="deviceChart"></canvas></div>
+    <div class="card"><h2>Operating systems</h2><canvas id="osChart"></canvas></div>
+    <div class="card"><h2>Referrers</h2><canvas id="refChart"></canvas></div>
+  </div>
+
+  <script>
+    const code = location.pathname.split("/").filter(Boolean).pop();
+    document.getElementById("code").textContent = code;
+    const colors = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899"];
+
+    function draw(id, type, obj) {
+      const labels = Object.keys(obj);
+      new Chart(document.getElementById(id), {
+        type,
+        data: {
+          labels,
+          datasets: [{ data: Object.values(obj), backgroundColor: colors, borderRadius: 4 }]
+        },
+        options: {
+          plugins: { legend: { display: type === "doughnut" } },
+          scales: type === "bar" ? { y: { beginAtZero: true, ticks: { precision: 0 } } } : {}
+        }
+      });
+    }
+
+    async function load() {
+      try {
+        const [s, t] = await Promise.all([
+          fetch(`/api/links/${code}/stats`).then(r => { if (!r.ok) throw new Error("Link not found"); return r.json(); }),
+          fetch(`/api/links/${code}/timeseries`).then(r => r.json())
+        ]);
+        document.getElementById("url").textContent = s.long_url;
+        document.getElementById("total").textContent = s.total_clicks;
+        document.getElementById("unique").textContent = s.unique_visitors;
+
+       new Chart(document.getElementById("timeChart"), {
+          type: "bar",
+          data: { labels: t.labels, datasets: [{ data: t.values, backgroundColor: "#3b82f6", borderRadius: 4 }] },
+          options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+        });
+        draw("browserChart", "doughnut", s.browsers);
+        draw("deviceChart", "bar", s.devices);
+        draw("osChart", "doughnut", s.os);
+        draw("refChart", "bar", s.referrers);
+      } catch (e) {
+        document.getElementById("err").textContent = e.message;
+      }
+    }
+    load();
+  </script>
+</body>
+</html>
