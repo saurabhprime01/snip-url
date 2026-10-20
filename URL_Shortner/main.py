@@ -4,6 +4,7 @@ import secrets
 import string
 import threading
 import time
+import os
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from datetime  import datetime, timezone
@@ -26,14 +27,15 @@ from sqlalchemy import (
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 from user_agents import parse as parse_ua
 
-DATABASE_URL = "sqlite:///./shortener.db"  # swap for Postgres later
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./shortener.db")  # swap for Postgres later
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine, autoflush=False)
 Base = declarative_base()
 
 ALPHABET = string.ascii_letters + string.digits
 CODE_LENGTH = 7
-IP_SALT = "change-this-to-a-random-string"  # used when hashing IPs
+IP_SALT = os.getenv("IP_SALT", "change-this-to-a-random-string")
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/") # used when hashing IPs
 RESERVED = {"api", "dashboard", "docs", "openapi", "redoc", "favicon"}
 
 
@@ -285,8 +287,7 @@ def create_link(payload: LinkCreate, db: Session = Depends(get_db)):
     link = Link(code=code, long_url=str(payload.url), expires_at=payload.expires_at)
     db.add(link)
     db.commit()
-    return {"code": code, "short_url": f"http://localhost:8000/{code}"}
-
+    return {"code": code, "short_url": f"{BASE_URL}/{code}"}
 
 @app.get("/api/links/{code}/stats")
 def link_stats(code: str, db: Session = Depends(get_db)):
